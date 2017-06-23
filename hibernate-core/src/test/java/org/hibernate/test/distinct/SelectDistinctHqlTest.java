@@ -8,12 +8,7 @@ package org.hibernate.test.distinct;
 
 import java.util.ArrayList;
 import java.util.List;
-import javax.persistence.CascadeType;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.ManyToOne;
-import javax.persistence.OneToMany;
+import javax.persistence.*;
 
 import org.hibernate.boot.SessionFactoryBuilder;
 import org.hibernate.jpa.QueryHints;
@@ -24,14 +19,11 @@ import org.hibernate.test.util.jdbc.SQLStatementInterceptor;
 import org.junit.Test;
 
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * @author Vlad Mihalcea
  */
-@TestForIssue( jiraKey = "HHH-10965" )
 public class SelectDistinctHqlTest extends BaseNonConfigCoreFunctionalTestCase {
 
 	private SQLStatementInterceptor sqlStatementInterceptor;
@@ -50,6 +42,7 @@ public class SelectDistinctHqlTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH-10965" )
 	public void test() {
 		doInHibernate( this::sessionFactory, session -> {
 			Person person = new Person();
@@ -106,6 +99,24 @@ public class SelectDistinctHqlTest extends BaseNonConfigCoreFunctionalTestCase {
 			String sqlQuery = sqlStatementInterceptor.getSqlQueries().getLast();
 			assertFalse( sqlQuery.contains( " distinct " ) );
 		} );
+
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-11726" )
+	public void testDistinctPassThrough() {
+		// This should be returning false ref. HHH-11726
+		doInHibernate( this::sessionFactory, session -> {
+			sqlStatementInterceptor.getSqlQueries().clear();
+			List<Person> persons = session.createQuery(
+					"select distinct p from Person p left join fetch p.phones ")
+					.setHint(QueryHints.HINT_PASS_DISTINCT_THROUGH, true)
+					.setMaxResults(5)
+					.getResultList();
+			assertEquals(1, persons.size());
+			String sqlQuery = sqlStatementInterceptor.getSqlQueries().getLast();
+			assertTrue(sqlQuery.contains(" distinct "));
+		});
 	}
 
 	@Entity(name = "Person")
